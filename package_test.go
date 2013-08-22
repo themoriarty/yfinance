@@ -45,3 +45,17 @@ func TestOneSymbol(t* testing.T){
 		t.Error("invalid adjusted close on the last record: ", results[li].AdjustedClose)
 	}
 }
+func TestNonExistingSymbol(t* testing.T){
+	yf := Interface{}
+	results, err := yf.GetPrices([]string{"blahblahcallmeifthisexists"}, Date(2009, 1, 1), Date(2009, 12, 31))
+	if (err == nil){
+		t.Error("succeeded in getting prices, got results: ", len(results))
+	}
+}
+func TestBadDate(t* testing.T){
+	yf := Interface{}
+	results, err := yf.GetPrices([]string{"MSFT"}, Date(2009, 1, 1), Date(2007, 12, 31))
+	if (err == nil){
+		t.Error("succeeded in getting prices, got results: ", len(results))
+	}
+}

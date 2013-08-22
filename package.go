@@ -3,7 +3,7 @@ import (
 	"fmt"
 	"net/http"
 	"time"
-	"log"
+	//"log"
 	"strconv"
 	"encoding/csv"
 )
@@ -71,7 +71,7 @@ func (this Interface) GetPrices(symbols []string, from time.Time, to time.Time) 
 			url := fmt.Sprintf("http://ichart.finance.yahoo.com/table.csv?s=%s&d=%d&e=%d&f=%d&g=d&a=%d&b=%d&c=%d&ignore=.csv",
 			symbol, to.Month() - 1, to.Day(), to.Year(), from.Month() - 1, from.Day(), from.Year())
 			res, err := http.Get(url)
-			log.Printf("asked for %s. err: %s, http code: %d\n", url, err, res.StatusCode)
+			//log.Printf("asked for %s. err: %s, http code: %d\n", url, err, res.StatusCode)
 			if res != nil{
 				defer res.Body.Close()
 			}
@@ -79,7 +79,7 @@ func (this Interface) GetPrices(symbols []string, from time.Time, to time.Time) 
 				doneChan <- parseCsv(csv.NewReader(res.Body), outChan)
 				return
 			}
-			doneChan <- Error{"can't fetch data"}
+			doneChan <- fmt.Errorf("can't fetch data: %s (http status %d)", err, res.StatusCode)
 		}(s)
 		activeWorkers++
 	}

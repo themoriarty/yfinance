@@ -27,7 +27,7 @@ func Date(year int, month time.Month, day int) time.Time {
 	return time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
 }
 
-func parseCsv(reader *csv.Reader, out chan Price) error{
+func parseCsv(reader *csv.Reader, symbol string, out chan symbolPrice) error{
 	header, err := reader.Read()
 	if (err != nil){
 		return Error{fmt.Sprintf("Can't read header: %s", err)}
@@ -51,7 +51,7 @@ func parseCsv(reader *csv.Reader, out chan Price) error{
 	for _, row := range(allData){
 		if date, err := time.Parse("2006-01-02", row[dateIdx]); err == nil{
 			if adjPrice, err := strconv.ParseFloat(row[adjCloseIdx], 64); err == nil{
-				out <- Price{date, int(adjPrice * 100)}
+				out <- symbolPrice{symbol, Price{date, int(adjPrice * 100)}}
 			} else{
 				return fmt.Errorf("Can't parse price from %s: %s", row[adjCloseIdx], err)
 			}
@@ -62,11 +62,19 @@ func parseCsv(reader *csv.Reader, out chan Price) error{
 	return nil
 }
 
-func (this Interface) GetPrices(symbols []string, from time.Time, to time.Time) ([]Price, error){
-	outChan := make(chan Price)
+type symbolPrice struct{
+	symbol string
+	price Price
+}
+
+func (this Interface) GetPrices(symbols []string, from time.Time, to time.Time) (*PriceList, error){
+	outChan := make(chan symbolPrice)
 	doneChan := make(chan error, len(symbols))
 	activeWorkers := 0
+	ret := make(map[string][]Price)
+
 	for _, s := range(symbols){
+		ret[s] = nil
 		go func(symbol string){
 			url := fmt.Sprintf("http://ichart.finance.yahoo.com/table.csv?s=%s&d=%d&e=%d&f=%d&g=d&a=%d&b=%d&c=%d&ignore=.csv",
 			symbol, to.Month() - 1, to.Day(), to.Year(), from.Month() - 1, from.Day(), from.Year())
@@ -75,15 +83,14 @@ func (this Interface) GetPrices(symbols []string, from time.Time, to time.Time) 
 			if res != nil{
 				defer res.Body.Close()
 			}
-			if err == nil && res.StatusCode >= 200 && res.StatusCode < 300{				
-				doneChan <- parseCsv(csv.NewReader(res.Body), outChan)
+			if err == nil && res.StatusCode >= 200 && res.StatusCode < 300{
+				doneChan <- parseCsv(csv.NewReader(res.Body), symbol, outChan)
 				return
 			}
 			doneChan <- fmt.Errorf("can't fetch data: %s (http status %d)", err, res.StatusCode)
 		}(s)
 		activeWorkers++
 	}
-	ret := make([]Price, 0)
 	var retError error
 	for activeWorkers > 0 {
 		select{
@@ -93,9 +100,13 @@ func (this Interface) GetPrices(symbols []string, from time.Time, to time.Time) 
 				retError = err
 			}
 		case r:= <- outChan:
-			ret = append(ret, r)
+			ret[r.symbol] = append(ret[r.symbol], r.price)			
 		}
 	}
-	return ret, retError
+	if retError == nil{
+		return priceList(from, to, ret), retError
+	} else{
+		return nil, retError
+	}
 }
 

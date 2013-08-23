@@ -2,23 +2,7 @@ package yfinance
 
 import (
 	"testing"
-	"sort"
 )
-
-type SortProxy struct{
-	Data []Price
-}
-func (sp SortProxy) Len() int{
-	return len(sp.Data)
-}
-func (sp SortProxy) Less(i, j int) bool{
-	return sp.Data[i].Date.Before(sp.Data[j].Date)
-}
-func (sp SortProxy) Swap(i, j int){
-	tmp := sp.Data[i]
-	sp.Data[i] = sp.Data[j]
-	sp.Data[j] = tmp
-}
 
 func TestOneSymbol(t* testing.T){
 	yf := Interface{}
@@ -26,36 +10,78 @@ func TestOneSymbol(t* testing.T){
 	if (err != nil){
 		t.Error("failed to get prices", err)
 	}
-	t.Log("results got: ", len(results))
-	sort.Sort(SortProxy{results})
-	if len(results) != 252{
-		t.Error("invalid number of results: ", len(results))
+	if len(results.Symbols) != 1 || results.Symbols[0] != "MSFT"{
+		t.Error("invalid number of symbols found: ", results.Symbols)
 	}
-	if (results[0].Date.Year() != 2009 || results[0].Date.Month() != 1 || results[0].Date.Day() != 2){
-		t.Error("invalid date on the first record: ", results[0].Date)
+	t.Log("results got: ", results)
+	first, err := results.PriceAt("MSFT", results.From)
+	if err == nil{
+		t.Error("found nonexisting price", first)
 	}
-	if (results[0].AdjustedClose != 1803){
-		t.Error("invalid adjusted close on the first record: ", results[0].AdjustedClose)
+	first, err = results.PriceAt("MSFT", Date(2009, 1, 2))
+	if (first.Date.Year() != 2009 || first.Date.Month() != 1 || first.Date.Day() != 2){
+		t.Error("invalid date on the first record: ", first.Date)
 	}
-	li := len(results) - 1
-	if (results[li].Date.Year() != 2009 || results[li].Date.Month() != 12 || results[li].Date.Day() != 31){
-		t.Error("invalid date on the last record: ", results[li].Date)
+	if (first.AdjustedClose != 1803){
+		t.Error("invalid adjusted close on the first record: ", first.AdjustedClose)
 	}
-	if (results[li].AdjustedClose != 2766){
-		t.Error("invalid adjusted close on the last record: ", results[li].AdjustedClose)
+	last, err := results.PriceAt("MSFT", results.To)
+	if err != nil{
+		t.Error("didn't found existing price", last)
+	}
+	if (last.Date.Year() != 2009 || last.Date.Month() != 12 || last.Date.Day() != 31){
+		t.Error("invalid date on the last record: ", last.Date)
+	}
+	if (last.AdjustedClose != 2766){
+		t.Error("invalid adjusted close on the last record: ", last.AdjustedClose)
+	}
+}
+func TestTwoSymbols(t* testing.T){
+	yf := Interface{}
+	results, err := yf.GetPrices([]string{"MSFT", "GOOG"}, Date(2009, 1, 1), Date(2009, 12, 31))
+	if (err != nil){
+		t.Error("failed to get prices", err)
+	}
+	if len(results.Symbols) != 2{
+		t.Error("invalid number of symbols found: ", results.Symbols)
+	}
+	t.Log("results got: ", results)
+	ms1, _ := results.PriceAt("MSFT", Date(2009, 1, 2))
+	go1, _ := results.PriceAt("GOOG", Date(2009, 1, 2))
+	if (ms1.AdjustedClose != 1803 || go1.AdjustedClose != 32132){
+		t.Error("invalid adjusted close on the first record: ", ms1, go1)
+	}
+	ms2, _ := results.PriceAt("MSFT", results.To)
+	go2, _ := results.PriceAt("GOOG", results.To)
+	if (ms2.AdjustedClose != 2766 || go2.AdjustedClose != 61998){
+		t.Error("invalid adjusted close on the last record: ", ms2, go2)
 	}
 }
 func TestNonExistingSymbol(t* testing.T){
 	yf := Interface{}
 	results, err := yf.GetPrices([]string{"blahblahcallmeifthisexists"}, Date(2009, 1, 1), Date(2009, 12, 31))
 	if (err == nil){
-		t.Error("succeeded in getting prices, got results: ", len(results))
+		t.Error("succeeded in getting prices, got results: ", len(results.Symbols))
 	}
 }
 func TestBadDate(t* testing.T){
 	yf := Interface{}
 	results, err := yf.GetPrices([]string{"MSFT"}, Date(2009, 1, 1), Date(2007, 12, 31))
 	if (err == nil){
-		t.Error("succeeded in getting prices, got results: ", len(results))
+		t.Error("succeeded in getting prices, got results: ", len((*results).Symbols))
+	}
+}
+
+func TestReadBadSymbol(t* testing.T){
+	yf := Interface{}
+	results, _:= yf.GetPrices([]string{"MSFT"}, Date(2009, 1, 1), Date(2007, 12, 31))
+	ok := false
+	defer func(){
+		recover()
+		ok = true
+	}()
+	results.PriceAt("haventAskedForThisSymbol", Date(2009, 1, 1))
+	if (!ok){
+		t.Error("didn't pacnicked on nonexisting symbol")
 	}
 }

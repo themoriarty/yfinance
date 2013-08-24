@@ -14,6 +14,11 @@ type PriceList struct{
 	prices map[string][]Price
 }
 
+func (p* PriceList) Prices(symbol string) ([]Price, bool){
+	ret, found := p.prices[symbol]
+	return ret, found
+}
+
 func (p *PriceList) PriceAt(symbol string, at time.Time) (Price, error) {
 	// if we have prices on 1st and 5th, and asked for a price on 2nd, return price at the end of 1st
 	prices, found := p.prices[symbol]

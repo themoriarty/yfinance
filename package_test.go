@@ -18,6 +18,10 @@ func TestOneSymbol(t* testing.T){
 	if err == nil{
 		t.Error("found nonexisting price", first)
 	}
+	prices, found := results.Prices("MSFT")
+	if !found || len(prices) != 252{
+		t.Error("can't get all prices", prices, err)
+	}
 	first, err = results.PriceAt("MSFT", Date(2009, 1, 2))
 	if (first.Date.Year() != 2009 || first.Date.Month() != 1 || first.Date.Day() != 2){
 		t.Error("invalid date on the first record: ", first.Date)
